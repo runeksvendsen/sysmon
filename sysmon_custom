@@ -1,0 +1,76 @@
+#!/bin/bash
+
+#settings:
+netspeed=true
+ram=false
+cpu=false
+#-------------------------------------------------------
+
+
+#---------------- initialize ---------------------------
+rm /tmp/.sysmon > /dev/null 2>&1
+dstat --net --mem --cpu --output=/tmp/.sysmon 1 1 > /dev/null 2>&1
+
+#----------- up/down speed -----------------------------
+if [ $netspeed = true ]; then
+
+upspeed=$(echo $(cat /tmp/.sysmon | tail -1 | cut -d ',' -f2)/1 | bc)
+
+upinunit=$(if [ $upspeed -gt 1048575 ]; then
+      upunit="MiB/s"
+		up1=$(echo $(echo $upspeed)/1024/1024 | bc -l)
+		echo $up1 | head -c 4
+   elif [ $upspeed -gt 1023 -a $upspeed -lt 1048576 ]; then
+      upunit="KiB/s"
+		up1=$(echo $(echo $upspeed)/1024 | bc)
+		echo $up1 | head -c 4
+	else 
+      upunit="B/s"
+		echo $upspeed | head -c 4
+	fi)
+
+downspeed=$(echo $(cat /tmp/.sysmon | tail -1 | cut -d ',' -f1)/1 | bc)
+
+downinunit=$(if [ $downspeed -gt 1048575 ]; then 
+      downunit="MiB/s"
+		down1=$(echo $(echo $downspeed)/1024/1024 | bc -l)
+		echo $down1 | head -c 4
+   elif [ $downspeed -gt 1023 -a $downspeed -lt 1048576 ]; then
+      downunit="KiB/s"
+		down1=$(echo $(echo $downspeed)/1024 | bc)
+		echo $down1 | head -c 4
+	else 
+      downunit="B/s"
+		echo $downspeed | head -c 4
+	fi)
+#---------------- up/down speed unit --------------------
+upunit=$(if [ $upspeed -gt 1048575 ]; then echo "MiB/s"; elif [ $upspeed -gt 1023 -a $upspeed -lt 1048576 ]; then echo "KiB/s"; else echo "B/s"; fi)
+downunit=$(if [ $downspeed -gt 1048575 ]; then echo "MiB/s"; elif [ $downspeed -gt 1023 -a $downspeed -lt 1048576 ]; then echo "KiB/s"; else echo "B/s"; fi)
+
+fi
+
+
+
+#------------------- CPU % used -------------------------
+if [ $cpu = true ]; then
+
+cpufree=$(cat /tmp/.sysmon | tail -1 | cut -d ',' -f9)
+cpuused=$(echo 100-$cpufree | bc | sed -e 's/\..*//')
+
+fi
+
+
+
+#------------------- RAM % used --------------------------
+if [ $ram = true ]; then
+
+memused=$(free -m | grep buffers/cache | tr -s ' ' | cut -d' ' -f 3)
+memfree=$(free -m | grep buffers/cache | tr -s ' ' | cut -d' ' -f 4)
+memtotal=$(echo $memused+$memfree | bc -l)
+
+memusedpercent=$(echo 100-100*$memfree/$memtotal | bc)
+
+fi
+
+#------------------ The Indicator Sysmonitor actual output -
+echo $(if [ $ram = true ]; then echo Mem: $memusedpercent% \|; fi) $(if [ $cpu = true ]; then echo CPU: $cpuused% \|; fi) $(if [ $netspeed = true ]; then echo ↓ $downinunit $downunit  ↑ $upinunit $upunit; fi)
